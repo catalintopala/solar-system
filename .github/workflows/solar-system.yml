@@ -9,8 +9,8 @@ on:
 
 env:
   MONGO_URI: 'mongodb+srv://supercluster.d83jj.mongodb.net/superData'
-  MONGO_USERNAME: ${{vars.MONGO_USERNAME}}
-  MONGO_PASSWORD: ${{secrets.MONGO_PASSWORD}}
+  MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+  MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
 
 jobs:
   unit-testing:
@@ -28,21 +28,21 @@ jobs:
       matrix:
         nodejs_version: [18, 19, 20]
         operating_system: [ubuntu-latest]
-    runs-on: ${{matrix.operating_system}}
+    runs-on: ${{ matrix.operating_system }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Setup NodeJS version - ${{matrix.nodejs_version}}
+    - name: Setup NodeJS version - ${{ matrix.nodejs_version }}
       uses: actions/setup-node@v3
       with:
-        node-version: ${{matrix.nodejs_version}}
+        node-version: ${{ matrix.nodejs_version }}
 
     - name: Cache NPM dependencies
       uses: actions/cache@v3
       with:
         path: node_modules
-        key: ${{runner.os}}-node-modules-${{hashFiles('package-lock.json')}}
+        key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
 
     - name: Install dependencies
       run: npm install
@@ -85,7 +85,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: node_modules
-        key: ${{runner.os}}-node-modules-${{hashFiles('package-lock.json')}}
+        key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
 
     - name: Install dependencies
       run: npm install
@@ -114,22 +114,22 @@ jobs:
     - name: DockerHub login
       uses: docker/login-action@v2.2.0
       with:
-        username: ${{vars.DOCKERHUB_USERNAME}}
-        password: ${{secrets.DOCKERHUB_PASSWORD}}
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
     - name: GHCR login
       uses: docker/login-action@v2.2.0
       with:
         registry: ghcr.io
-        username: ${{github.repository_owner}}
-        password: ${{secrets.GITHUB_TOKEN}}
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Docker build for testing
       uses: docker/build-push-action@v4
       with:
         context: .
         push: false
-        tags: ${{vars.DOCKERHUB_USERNAME}}/solar-system:${{github.sha}}
+        tags: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
 
     - name: Docker image testing
       run: |
@@ -139,9 +139,9 @@ jobs:
           -e MONGO_URI=$MONGO_URI \
           -e MONGO_USERNAME=$MONGO_USERNAME \
           -e MONGO_PASSWORD=$MONGO_PASSWORD \
-          ${{vars.DOCKERHUB_USERNAME}}/solar-system:${{github.sha}}
+          ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
 
-        export IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' solar-system-app)
+        export IP=$(docker inspect -f '{{ range .NetworkSettings.Networks }}{{ .IPAddress }}{{ end }}' solar-system-app)
         echo $IP
 
         echo Testing image URL using wget
@@ -153,5 +153,29 @@ jobs:
         context: .
         push: true
         tags: |
-          ${{vars.DOCKERHUB_USERNAME}}/solar-system:${{github.sha}}
-          ghcr.io/${{github.repository_owner}}/solar-system:${{github.sha}}
+          ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
+          ghcr.io/${{ github.repository_owner }}/solar-system:${{ github.sha }}
+
+  dev-deploy:
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install kubectl CLI
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.26.0'
+
+    - name: Set kubeconfig file
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBECONFIG }}
+
+    - name: Fetch Kubernetes cluster details
+      run: |
+        kubectl version
+        echo ---------------------------------------------------
+        kubectl get nodes
